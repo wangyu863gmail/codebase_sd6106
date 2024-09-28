@@ -2,6 +2,6 @@
 stock_symbols:
   - AAPL
   - MSFT
-  - GOOGL
-  - AMZN
-  - TSLA
+#  - GOOGL
+#  - AMZN
+#  - TSLA

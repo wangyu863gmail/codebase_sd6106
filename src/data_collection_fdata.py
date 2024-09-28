@@ -1,5 +1,3 @@
-# fetch_stock_data.py
-
 import yfinance as yf
 import pandas as pd
 import yaml
@@ -71,4 +69,4 @@ if __name__ == "__main__":
     print(stock_df.head())
     
     # Optionally save the dataframe to a CSV file
-    stock_df.to_csv('stock_data_2023.csv', index=False)
+    stock_df.to_csv('financial_data.csv', index=False)
