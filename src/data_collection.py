@@ -1,111 +1,230 @@
-import yfinance as yf
 import pandas as pd
 import yaml
 import os
-from datetime import timedelta
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from data_collection_fdata import fetch_stock_data
+from data_collection_sdata import fetch_sentiment_data
+import mysql.connector
+from sqlalchemy import create_engine
 
-# Function to load YAML configuration
+###
+def connect_to_mysql(i_user, i_password):
+    """
+    Connects to a MySQL database.
+    
+    Returns:
+    mysql.connector.connection.MySQLConnection: A MySQL database connection.
+    mysql.connector.cursor.MySQLCursor: A MySQL database cursor.
+    """
+    # Connect to MySQL
+    conn = mysql.connector.connect(
+        host="localhost",
+        user=i_user,
+        password=i_password
+    )
+    cursor = conn.cursor()
+    
+    return conn, cursor
+
+def create_database(cursor, db_name):
+    """
+    Creates a new database in MySQL.
+    
+    Args:
+    cursor (mysql.connector.cursor.MySQLCursor): A MySQL database cursor.
+    db_name (str): The name of the database to create.
+    """
+    # Create the database
+    cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db_name}")
+
+def connect_to_database(conn, db_name):
+    # Connect to the new QT_DB database
+    conn = mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="121212zzZ",
+        database=db_name
+    )
+    cursor = conn.cursor()
+
+    return conn, cursor
+
+def create_tables(cursor):
+    # Create table_NP (Non-Partitioned Table)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS table_NP (
+        Date VARCHAR(10),
+        Stock VARCHAR(10),
+        Open FLOAT,
+        High FLOAT,
+        Low FLOAT,
+        Close FLOAT,
+        Volume BIGINT,
+        OverallSentimentScore FLOAT
+    )
+    """)
+
+    # Create an initial partitioned table without specific partitions
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS table_P (
+        Date VARCHAR(10),
+        Stock VARCHAR(10),
+        Open FLOAT,
+        High FLOAT,
+        Low FLOAT,
+        Close FLOAT,
+        Volume BIGINT,
+        OverallSentimentScore FLOAT
+    ) PARTITION BY LIST COLUMNS (Date)
+    (
+        PARTITION p_2024_09_29 VALUES IN ('2024-09-29'),
+        PARTITION p_2024_09_30 VALUES IN ('2024-09-30')
+    )
+    """)
+
+def add_partition_for_day(cursor, date_str):
+    """
+    Dynamically adds a partition for a specific date string.
+
+    Args:
+    cursor (mysql.connector.cursor.MySQLCursor): A MySQL database cursor.
+    date_str (str): Date string in 'YYYY-MM-DD' format to create a partition.
+    """
+    # Replace dashes in the date string to create a valid partition name
+    date_partition_name = date_str.replace('-', '_')
+    
+    # Dynamically create partition for the specific date
+    cursor.execute(f"""
+    ALTER TABLE table_P 
+    ADD PARTITION (PARTITION p_{date_partition_name} VALUES IN ('{date_str}'))
+    """)
+
+def database_setup(user, password, database):
+    # Connect to MySQL
+    conn, cursor = connect_to_mysql(user, password)
+
+    # Create the new database
+    create_database(cursor, database)
+
+    # Close the connection to the default database
+    conn.close()
+
+    # Connect to the new QT_DB database
+    conn, cursor = connect_to_database(conn, database)
+
+    # Create the tables
+    create_tables(cursor)
+
+    # Close the connection
+    conn.close()
+
+# In the load_data function, update the insert query
+def load_data(df, user, password, database):
+    conn, cursor = connect_to_mysql(user, password)
+    conn, cursor = connect_to_database(conn, database)
+    # Create SQLAlchemy engine
+    engine = create_engine(f'mysql+mysqlconnector://{user}:{password}@localhost/{database}')
+
+    # Load data into table_NP
+    df.to_sql('table_NP', engine, if_exists='append', index=False)
+
+    # Ensure table_P is partitioned by date strings
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS table_P (
+        Date VARCHAR(10),
+        Stock VARCHAR(10),
+        Open FLOAT,
+        High FLOAT,
+        Low FLOAT,
+        Close FLOAT,
+        Volume BIGINT,
+        OverallSentimentScore FLOAT
+    ) PARTITION BY LIST COLUMNS (Date)
+    (
+        PARTITION p_2024_09_29 VALUES IN ('2024-09-29'),
+        PARTITION p_2024_09_30 VALUES IN ('2024-09-30')
+    )
+    """)
+
+    # Get unique dates from the dataframe
+    unique_dates = df['Date'].unique()
+
+    print(df.info())
+
+    # Create partitions for each unique date string
+    for date_str in unique_dates:
+        add_partition_for_day(cursor, date_str)
+
+    # Insert data into table_P
+    insert_query = """
+    INSERT INTO table_P (Date, Stock, Open, High, Low, Close, Volume, OverallSentimentScore)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)  -- Note the use of backticks
+    """
+    
+    data_to_insert = df.values.tolist()
+    cursor.executemany(insert_query, data_to_insert)
+
+    # Commit changes and close connection
+    conn.commit()
+    conn.close()
+
+
 def load_yaml_config(file_path):
+    """
+    Loads a YAML configuration file.
+    
+    Args:
+    file_path (str): The path to the YAML file.
+    
+    Returns:
+    dict: A dictionary with the YAML configuration data.
+    """
     with open(file_path, 'r') as file:
         config = yaml.safe_load(file)
     return config
 
-# Function to fetch stock data from Yahoo Finance
-def fetch_stock_data(stocks, start_date, end_date):
-    all_data = []
-    for stock in stocks:
-        stock_data = yf.download(stock, start=start_date, end=end_date)
-        stock_data['Stock'] = stock
-        stock_data.reset_index(inplace=True)
-        stock_data = stock_data[['Date', 'Stock', 'Open', 'High', 'Low', 'Close', 'Volume']]
-        all_data.append(stock_data)
-    final_df = pd.concat(all_data, ignore_index=True)
-    return final_df
-
-# Function to preprocess article (placeholder)
-def preprocess_article(article):
-    return article
-
-# Function to analyze sentiment using VADER
-def analyze_sentiment(article):
-    analyzer = SentimentIntensityAnalyzer()
-    sentiment_score = analyzer.polarity_scores(article)['compound']
-    if sentiment_score > 0.05:
-        return 1
-    elif sentiment_score < -0.05:
-        return -1
-    else:
-        return 0
-
-# Function to compute the overall sentiment score for a given day's news
-def compute_overall_sentiment(sentiment_scores):
-    avg_sentiment = sum(sentiment_scores) / len(sentiment_scores) if sentiment_scores else 0
-    if avg_sentiment > 0.33:
-        return 1
-    elif avg_sentiment < -0.33:
-        return -1
-    else:
-        return 0
-
-# Main function to perform stock data collection and sentiment analysis
-def main():
-    # Load configurations
+if __name__ == "__main__":
+    # Define the config folder path
     conf_folder = os.path.join(os.getcwd(), 'conf')
+    
+    # Load the general config (dates) from YAML file
     general_config_path = os.path.join(conf_folder, 'general_config.yml')
-    instrument_list_path = os.path.join(conf_folder, 'instrument_list.yml')
-
     general_config = load_yaml_config(general_config_path)
+    
+    # Load the stock symbols from YAML file
+    instrument_list_path = os.path.join(conf_folder, 'instrument_list.yml')
     instrument_list = load_yaml_config(instrument_list_path)
-
+    
+    # Get the start_date, end_date, and stock_symbols from the config files
     start_date = general_config['start_date']
     end_date = general_config['end_date']
-    stock_symbols = instrument_list['stocks']
 
+    mysql_user = general_config['user']
+    mysql_password = general_config['password']
+    mysql_database = general_config['database']
+
+    stock_symbols = instrument_list['stock_symbols']
+    
     # Fetch stock data
-    stock_df = fetch_stock_data(stock_symbols, start_date, end_date)
+    #financial_df = fetch_stock_data(stock_symbols, start_date, end_date)
+    #sentiment_df = fetch_sentiment_data(stock_symbols, start_date, end_date)
 
-    # Create an empty DataFrame to store sentiment analysis results
-    sentiment_results = pd.DataFrame(columns=['Date', 'Stock', 'Overall Sentiment Score'])
+    financial_df = pd.read_csv('./financial_data.csv')
+    sentiment_df = pd.read_csv('./sentiment_data.csv')
 
-    # Perform sentiment analysis for each stock and day
-    current_date = pd.to_datetime(start_date)
-    end_date = pd.to_datetime(end_date)
+    final_df = pd.merge(financial_df, sentiment_df, on=['Date', 'Stock'], how='left')
+    final_df.to_csv('final_data.csv', index=False)
+#    
+#    # Show the first few rows of the dataframe
+#    print('financial data')
+#    print(financial_df.head())
+#
+#    print('sentiment data')
+#    print(sentiment_df.head())
+#
+#    # Show the first few rows of the dataframe
+#    print('final_df data')
+#    print(final_df.head())    
 
-    while current_date <= end_date:
-        for stock_symbol in stock_symbols:
-            news_articles = get_news_for_stock(stock_symbol, current_date)  # Placeholder function
+    database_setup(mysql_user, mysql_password, mysql_database)
 
-            if not news_articles:
-                continue
-
-            sentiment_scores = []
-            for article in news_articles:
-                cleaned_article = preprocess_article(article if article else "")
-                sentiment_score = analyze_sentiment(cleaned_article)
-                sentiment_scores.append(sentiment_score)
-
-            overall_sentiment = compute_overall_sentiment(sentiment_scores)
-            sentiment_results = sentiment_results.append({
-                'Date': current_date.strftime('%Y-%m-%d'),
-                'Stock': stock_symbol,
-                'Overall Sentiment Score': overall_sentiment
-            }, ignore_index=True)
-
-        current_date += timedelta(days=1)
-
-    # Merge sentiment analysis with stock data
-    stock_df['Date'] = pd.to_datetime(stock_df['Date']).dt.strftime('%Y-%m-%d')
-    merged_df = pd.merge(stock_df, sentiment_results, on=['Date', 'Stock'], how='left')
-
-    # Save final merged DataFrame to CSV
-    merged_df.to_csv('merged_stock_sentiment_data.csv', index=False)
-
-    print("Stock data and sentiment analysis successfully merged and saved to 'merged_stock_sentiment_data.csv'.")
-
-# Placeholder for news fetching function (to be implemented)
-def get_news_for_stock(stock_symbol, current_date):
-    return []  # Placeholder: Replace with actual implementation to fetch news
-
-if __name__ == "__main__":
-    main()
+    load_data(final_df, mysql_user, mysql_password, mysql_database)

@@ -79,7 +79,7 @@ def fetch_sentiment_data(stocks, start_date, end_date):
     end_date = datetime.strptime(end_date, '%Y-%m-%d')
     current_date = start_date
     # Create an empty DataFrame to store the results
-    results = pd.DataFrame(columns=['Date', 'Stock', 'Overall Sentiment Score'])
+    results = pd.DataFrame(columns=['Date', 'Stock', 'OverallSentimentScore'])
 
     # Main loop to collect data for each stock, each day, and perform sentiment analysis
     
@@ -107,7 +107,7 @@ def fetch_sentiment_data(stocks, start_date, end_date):
             results = results.append({
                 'Date': current_date.strftime('%Y-%m-%d'),
                 'Stock': stock_symbol,
-                'Overall Sentiment Score': overall_sentiment
+                'OverallSentimentScore': overall_sentiment
             }, ignore_index=True)
         
         # Move to the next day

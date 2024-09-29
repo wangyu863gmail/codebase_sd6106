@@ -1,3 +1,8 @@
 # general_config.yml
 start_date: '2024-09-17'
 end_date: '2024-09-20'
+
+# MySQL
+user: 'root'
+password: '121212zzZ'
+database: 'QT_DB'
