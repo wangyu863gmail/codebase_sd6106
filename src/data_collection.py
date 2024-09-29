@@ -125,7 +125,7 @@ def load_data(df, user, password, database):
     engine = create_engine(f'mysql+mysqlconnector://{user}:{password}@localhost/{database}')
 
     # Load data into table_NP
-    df.to_sql('table_NP', engine, if_exists='append', index=False)
+    df.to_sql('table_np', engine, if_exists='append', index=False)
 
     # Ensure table_P is partitioned by date strings
     cursor.execute("""
