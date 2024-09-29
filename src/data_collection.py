@@ -51,7 +51,7 @@ def connect_to_database(conn, db_name):
 def create_tables(cursor):
     # Create table_NP (Non-Partitioned Table)
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS table_NP (
+    CREATE TABLE IF NOT EXISTS table_np (
         Date VARCHAR(10),
         Stock VARCHAR(10),
         Open FLOAT,
@@ -65,7 +65,7 @@ def create_tables(cursor):
 
     # Create an initial partitioned table without specific partitions
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS table_P (
+    CREATE TABLE IF NOT EXISTS table_p (
         Date VARCHAR(10),
         Stock VARCHAR(10),
         Open FLOAT,
@@ -208,11 +208,11 @@ if __name__ == "__main__":
     #financial_df = fetch_stock_data(stock_symbols, start_date, end_date)
     #sentiment_df = fetch_sentiment_data(stock_symbols, start_date, end_date)
 
-    financial_df = pd.read_csv('./financial_data.csv')
-    sentiment_df = pd.read_csv('./sentiment_data.csv')
+    financial_df = pd.read_csv(f'financial_data_{start_date}_{end_date}.csv')
+    sentiment_df = pd.read_csv(f'sentiment_data_{start_date}_{end_date}.csv')
 
     final_df = pd.merge(financial_df, sentiment_df, on=['Date', 'Stock'], how='left')
-    final_df.to_csv('final_data.csv', index=False)
+    final_df.to_csv(f'final_data_{start_date}_{end_date}.csv', index=False)
 #    
 #    # Show the first few rows of the dataframe
 #    print('financial data')
@@ -224,6 +224,9 @@ if __name__ == "__main__":
 #    # Show the first few rows of the dataframe
 #    print('final_df data')
 #    print(final_df.head())    
+
+    start_date = general_config['start_date']
+    end_date = general_config['end_date']
 
     database_setup(mysql_user, mysql_password, mysql_database)
 

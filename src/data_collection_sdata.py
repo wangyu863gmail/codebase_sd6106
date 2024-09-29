@@ -142,4 +142,5 @@ if __name__ == "__main__":
     print(sentiment_df.head())
     
     # Optionally save the dataframe to a CSV file
-    sentiment_df.to_csv('sentiment_data.csv', index=False)
+    filename = f'sentiment_data_{start_date}_{end_date}.csv'
+    sentiment_df.to_csv(filename, index=False)

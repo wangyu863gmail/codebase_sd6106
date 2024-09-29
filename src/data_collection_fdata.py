@@ -69,4 +69,5 @@ if __name__ == "__main__":
     print(stock_df.head())
     
     # Optionally save the dataframe to a CSV file
-    stock_df.to_csv('financial_data.csv', index=False)
+    filename = f'financial_data_{start_date}_{end_date}.csv'
+    stock_df.to_csv(filename, index=False)

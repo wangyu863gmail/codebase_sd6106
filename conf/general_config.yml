@@ -2,6 +2,9 @@
 start_date: '2024-09-17'
 end_date: '2024-09-20'
 
+today_start_date: '2024-09-23'
+today_end_date: '2024-09-24'
+
 # MySQL
 user: 'root'
 password: '121212zzZ'
